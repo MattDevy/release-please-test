@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/MattDevy/release-please-test/compare/v0.2.0...v0.2.1) (2025-11-19)
+
+
+### Bug Fixes
+
+* spec update v9.2.2 ([#3](https://github.com/MattDevy/release-please-test/issues/3)) ([62156e2](https://github.com/MattDevy/release-please-test/commit/62156e20b52ef4063aacf73dd9c8a24913e14135))
+
 ## [0.2.0](https://github.com/MattDevy/release-please-test/compare/v0.1.0...v0.2.0) (2025-11-19)
 
 
