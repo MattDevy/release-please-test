@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/MattDevy/release-please-test/compare/v0.1.0...v0.2.0) (2025-11-19)
+
+
+### Features
+
+* adding main.go ([5cfa668](https://github.com/MattDevy/release-please-test/commit/5cfa668459a96ee1cdf54fa0b26198dd205d0326))
+
+
+### Bug Fixes
+
+* more git add main.go ([56ef90d](https://github.com/MattDevy/release-please-test/commit/56ef90d4f0e61aae499ff95e16ceb47f82619656))
+
 ## [0.1.0](https://github.com/MattDevy/release-please-test/compare/v0.0.1...v0.1.0) (2025-11-19)
 
 
