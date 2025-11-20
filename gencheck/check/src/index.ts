@@ -13,7 +13,7 @@ interface EnvConfig {
   skipLabel: string;
   postComment: boolean;
   failOnDetected: boolean;
-  commentHeader: string;
+  commentTemplate: string;
 }
 
 async function run(): Promise<void> {
@@ -26,7 +26,7 @@ async function run(): Promise<void> {
       skipLabel: process.env.SKIP_LABEL || '',
       postComment: process.env.POST_COMMENT === 'true',
       failOnDetected: process.env.FAIL_ON_DETECTED === 'true',
-      commentHeader: process.env.COMMENT_HEADER || ''
+      commentTemplate: process.env.COMMENT_TEMPLATE || ''
     };
 
     // Initialize Octokit
@@ -129,8 +129,8 @@ async function run(): Promise<void> {
         repo,
         pullNumber,
         generatedFiles,
-        config.commentHeader,
-        config.skipLabel
+        config.skipLabel,
+        config.commentTemplate
       );
     } else if (!detected && config.postComment) {
       // Remove warning comment if no generated files found
@@ -215,8 +215,8 @@ async function createOrUpdateComment(
   repo: string,
   pullNumber: number,
   files: string[],
-  header: string,
-  skipLabel: string
+  skipLabel: string,
+  template: string
 ): Promise<void> {
   try {
     // Search for existing comment
@@ -231,7 +231,7 @@ async function createOrUpdateComment(
     );
 
     // Build comment body
-    const body = buildCommentBody(files, header, skipLabel);
+    const body = buildCommentBody(files, skipLabel, owner, repo, pullNumber, template);
 
     if (existingComment) {
       // Update existing comment
@@ -309,36 +309,51 @@ async function removeOrUpdateComment(
 /**
  * Build the comment body with file list
  */
-function buildCommentBody(files: string[], header: string, skipLabel: string): string {
+function buildCommentBody(
+  files: string[], 
+  skipLabel: string,
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  template: string
+): string {
   const fileList = files.map(file => `- \`${file}\``).join('\n');
   
+  // If custom template is provided, use it with variable substitution
+  if (template && template.trim() !== '') {
+    const customBody = template
+      .replace(/\{\{file_count\}\}/g, files.length.toString())
+      .replace(/\{\{file_list\}\}/g, fileList)
+      .replace(/\{\{skip_label\}\}/g, skipLabel)
+      .replace(/\{\{pr_number\}\}/g, pullNumber.toString())
+      .replace(/\{\{repo\}\}/g, repo)
+      .replace(/\{\{owner\}\}/g, owner);
+    
+    return `${COMMENT_MARKER}\n\n${customBody}`;
+  }
+  
+  // Default template - generic with options to add label or raise issue
   return `${COMMENT_MARKER}
 
-## ${header}
+## ⚠️ Generated Files Modified
 
 This PR modifies **${files.length}** generated file(s):
 
 ${fileList}
 
-### ⚠️ Warning
+Generated files are typically created automatically and manual edits may be overwritten.
 
-These files appear to be automatically generated and should not be edited manually. Changes to generated files may be overwritten during the next code generation.
+### Options
 
-### What to do
-
-- **If this is intentional:** Add the \`${skipLabel}\` label to this PR to bypass this check
-- **If this is a mistake:** Revert the changes to these files and regenerate them using the appropriate code generation tools
-
----
+- **Add the \`${skipLabel}\` label** to this PR if these changes are intentional
+- **[Open an issue](https://github.com/${owner}/${repo}/issues/new)** to discuss if you're unsure how to proceed
 
 <details>
-<summary>About this check</summary>
+<summary>More information</summary>
 
-This check scans modified files for generated code markers. Files are detected as generated if they contain patterns like:
-- \`Code generated ... DO NOT EDIT\`
-- \`Code generated from specification\`
+This check detects files with generation markers like \`Code generated ... DO NOT EDIT\`.
 
-If you believe this is a false positive, please review the file patterns and marker patterns used in the workflow configuration.
+If this is incorrect, review the file patterns and marker patterns in the workflow configuration.
 </details>`;
 }
 
