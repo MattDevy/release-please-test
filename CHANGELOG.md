@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0](https://github.com/MattDevy/release-please-test/compare/v0.2.2...v0.3.0) (2025-11-20)
+
+
+### Features
+
+* Add fake generated go file ([906d96c](https://github.com/MattDevy/release-please-test/commit/906d96c63d03529796c57cb57eb6281c825bf558))
+* Gencheck ([9d2b97e](https://github.com/MattDevy/release-please-test/commit/9d2b97eb4ab1d6d45790f90c7501c74878637d83))
+* Make gencheck more configurable ([915c722](https://github.com/MattDevy/release-please-test/commit/915c7223ab2cce42ad9ec306e5092111f09d47e4))
+
 ## [0.2.2](https://github.com/MattDevy/release-please-test/compare/v0.2.1...v0.2.2) (2025-11-20)
 
 
