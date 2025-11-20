@@ -1,4 +1,6 @@
 // Code generated DO NOT EDIT
 package main
 
-func generatedFunction() {}
+func generatedFunction() {
+	// this is a test edit
+}
