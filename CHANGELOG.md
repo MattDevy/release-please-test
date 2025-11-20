@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/MattDevy/release-please-test/compare/v0.2.1...v0.2.2) (2025-11-20)
+
+
+### Bug Fixes
+
+* Adds sentence-case plugin ([0ed1772](https://github.com/MattDevy/release-please-test/commit/0ed17721a251568bda126d93309d805aa58d3714))
+
 ## [0.2.1](https://github.com/MattDevy/release-please-test/compare/v0.2.0...v0.2.1) (2025-11-19)
 
 
