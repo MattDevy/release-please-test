@@ -7,5 +7,10 @@
         ".": {
             "version-file": "version/version.go"
         }
-    }
+    },
+    "plugins": [
+        {
+            "type": "sentence-case"
+        }
+    ]
 }
