@@ -25,10 +25,10 @@ inputs:
     description: 'Whether to fail the check when generated files are detected (without skip label)'
     required: false
     default: 'true'
-  comment_header:
-    description: 'Custom header text for the PR comment'
+  comment_template:
+    description: 'Custom comment template with variables: {{file_count}}, {{file_list}}, {{skip_label}}, {{pr_number}}, {{repo}}, {{owner}}'
     required: false
-    default: '⚠️ Generated Files Modified'
+    default: ''
 
 outputs:
   detected:
@@ -58,7 +58,7 @@ runs:
         SKIP_LABEL: ${{ inputs.skip_label }}
         POST_COMMENT: ${{ inputs.post_comment }}
         FAIL_ON_DETECTED: ${{ inputs.fail_on_detected }}
-        COMMENT_HEADER: ${{ inputs.comment_header }}
+        COMMENT_TEMPLATE: ${{ inputs.comment_template }}
       shell: 'bash'
       run: |-
         cd "${{ github.action_path }}/check"
