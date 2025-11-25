@@ -3,6 +3,7 @@
     "release-type": "go",
     "include-component-in-tag": false,
     "include-v-in-tag": true,
+    "versioning": "always-bump-patch",
     "packages": {
         ".": {
             "version-file": "version/version.go"
