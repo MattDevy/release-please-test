@@ -19,4 +19,4 @@
 // https://github.com/elastic/elasticsearch-specification/tree/907d11a72a6bfd37b777d526880c56202889609e
 package typedapi
 
-const APIPath = "/_typed_search_1"
+const APIPath = "/_typed_search"
