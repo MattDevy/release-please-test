@@ -4,7 +4,7 @@
     "include-component-in-tag": false,
     "include-v-in-tag": true,
     "versioning": "always-bump-patch",
-    "draft": true,
+    "changelog-type": "github",
     "packages": {
         ".": {
             "version-file": "version/version.go"
