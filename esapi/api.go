@@ -19,4 +19,4 @@
 
 package esapi
 
-const APIPath = "/_cat"
+const APIPath = "/_cat_1"

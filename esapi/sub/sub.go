@@ -19,4 +19,4 @@
 
 package sub
 
-const APIPath = "/_sub"
+const APIPath = "/_sub_1"
