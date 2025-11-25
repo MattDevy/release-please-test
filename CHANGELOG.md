@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4 (2025-11-25)
+
+**Full Changelog**: https://github.com/MattDevy/release-please-test/compare/v0.2.3...v0.2.4
+
 ## [0.2.3](https://github.com/MattDevy/release-please-test/compare/v0.2.2...v0.2.3) (2025-11-25)
 
 
