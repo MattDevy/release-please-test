@@ -53,6 +53,45 @@ jobs:
 
             const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+            const normalizeBodyHeadings = (input) => {
+              const text = String(input || '').replace(/\r\n/g, '\n')
+              if (!text) return text
+
+              const lines = text.split('\n')
+              if (lines.length === 0) return text
+
+              const headingMatch = (line) => line.match(/^(#{1,6})\s+(.*)$/)
+
+              // Ensure the first line is always an H2.
+              const firstHeading = headingMatch(lines[0])
+              if (firstHeading) {
+                lines[0] = `## ${firstHeading[2]}`
+              } else {
+                lines[0] = `## ${lines[0].trim()}`
+              }
+
+              // If any later headings are H1/H2, downgrade *all* later headings equally
+              // so the minimum heading level becomes H3.
+              let minLaterLevel = Infinity
+              for (let i = 1; i < lines.length; i++) {
+                const m = headingMatch(lines[i])
+                if (!m) continue
+                minLaterLevel = Math.min(minLaterLevel, m[1].length)
+              }
+
+              const delta = minLaterLevel <= 2 ? 3 - minLaterLevel : 0
+              if (delta > 0) {
+                for (let i = 1; i < lines.length; i++) {
+                  const m = headingMatch(lines[i])
+                  if (!m) continue
+                  const newLevel = Math.min(6, m[1].length + delta)
+                  lines[i] = `${'#'.repeat(newLevel)} ${m[2]}`
+                }
+              }
+
+              return lines.join('\n')
+            }
+
             const maxMajorMinor = maxSemver ? parseMajorMinor(maxSemver) : null
             const filteredReleases = releasesResponse.data
               .filter((release) => release.draft === false && release.prerelease === false)
@@ -96,11 +135,11 @@ jobs:
                 const body = rawBody.trim()
                 if (!body) return ''
 
-                if (!semverString) return body
+                if (!semverString) return normalizeBodyHeadings(body)
 
                 const firstLine = rawBody.trimStart().split('\n')[0] || ''
                 const semverInFirstLine = new RegExp(`\\bv?${escapeRegExp(semverString)}\\b`).test(firstLine)
-                if (semverInFirstLine) return body
+                if (semverInFirstLine) return normalizeBodyHeadings(body)
 
                 const prevTag = prevTagByTag.get(tag) || null
                 const date = String(release.published_at || '').slice(0, 10)
@@ -108,11 +147,11 @@ jobs:
                 const link = prevTag ? `${base}/compare/${prevTag}...${tag}` : `${base}/releases/tag/${tag}`
                 const header = `## [${semverString}](${link}) (${date})`
 
-                return `${header}\n\n\n${body}`
+                return normalizeBodyHeadings(`${header}\n\n\n${body}`)
               })
               .filter(Boolean)
 
-            const changelog = [`# ${title}`, ...bodies].join('\n\n')
+            const changelog = [`# ${title}`, ...bodies].join('\n\n') + '/n'
 
             console.log(changelog)
             
