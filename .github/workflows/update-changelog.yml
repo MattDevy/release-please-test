@@ -151,7 +151,7 @@ jobs:
               })
               .filter(Boolean)
 
-            const changelog = [`# ${title}`, ...bodies].join('\n\n') + '/n'
+            const changelog = [`# ${title}`, ...bodies].join('\n\n') + '\n'
 
             console.log(changelog)
             
