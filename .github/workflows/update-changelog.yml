@@ -12,8 +12,53 @@ jobs:
       - uses: actions/github-script@v8
         with:
           script: |
-            const releases = await github.rest.repos.listReleases({
+            const maxSemver = (() => {
+              const refName = '${{ github.ref_name }}'
+              return /^\d+\.\d+$/.test(refName) ? refName : null
+            })()
+            const releasesResponse = await github.rest.repos.listReleases({
               owner: '${{ github.repository_owner }}',
               repo: '${{ github.event.repository.name }}',
+              per_page: 100,
             })
+            const parseMajorMinor = (tag) => {
+              const match = String(tag).trim().match(/^v?(\d+)\.(\d+)(?:\.\d+)?/)
+              if (!match) return null
+              return { major: Number(match[1]), minor: Number(match[2]) }
+            }
+
+            const parseSemver = (tag) => {
+              const match = String(tag).trim().match(/^v?(\d+)\.(\d+)\.(\d+)/)
+              if (!match) return null
+              return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) }
+            }
+
+            const compareSemverDesc = (a, b) => {
+              if (!a && !b) return 0
+              if (!a) return 1
+              if (!b) return -1
+              if (a.major !== b.major) return b.major - a.major
+              if (a.minor !== b.minor) return b.minor - a.minor
+              return b.patch - a.patch
+            }
+
+            const maxMajorMinor = maxSemver ? parseMajorMinor(maxSemver) : null
+            const releases = releasesResponse.data
+              .filter((release) => release.draft === false && release.prerelease === false)
+              .filter((release) => {
+                if (!maxMajorMinor) return true
+                const mm = parseMajorMinor(release.tag_name)
+                if (!mm) return false // non-semver tag; drop it
+                return (
+                  mm.major < maxMajorMinor.major ||
+                  (mm.major === maxMajorMinor.major && mm.minor <= maxMajorMinor.minor)
+                )
+              })
+              .sort((a, b) => {
+                const dayA = (a.published_at || '').slice(0, 10) // YYYY-MM-DD
+                const dayB = (b.published_at || '').slice(0, 10)
+                if (dayA !== dayB) return dayB.localeCompare(dayA) // desc
+                return compareSemverDesc(parseSemver(a.tag_name), parseSemver(b.tag_name))
+              })
             console.log(releases)
+            
