@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: actions/github-script@v8
         with:
           script: |
@@ -19,9 +19,13 @@ jobs:
               const refName = '${{ github.ref_name }}'
               return /^\d+\.\d+$/.test(refName) ? refName : null
             })()
+
+            const owner = '${{ github.repository_owner }}'
+            const repo = '${{ github.event.repository.name }}'
+
             const releasesResponse = await github.rest.repos.listReleases({
-              owner: '${{ github.repository_owner }}',
-              repo: '${{ github.event.repository.name }}',
+              owner,
+              repo,
               per_page: 100,
             })
             const parseMajorMinor = (tag) => {
@@ -45,8 +49,12 @@ jobs:
               return b.patch - a.patch
             }
 
+            const compareSemverAsc = (a, b) => -compareSemverDesc(a, b)
+
+            const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
             const maxMajorMinor = maxSemver ? parseMajorMinor(maxSemver) : null
-            const releases = releasesResponse.data
+            const filteredReleases = releasesResponse.data
               .filter((release) => release.draft === false && release.prerelease === false)
               .filter((release) => {
                 if (!maxMajorMinor) return true
@@ -57,6 +65,20 @@ jobs:
                   (mm.major === maxMajorMinor.major && mm.minor <= maxMajorMinor.minor)
                 )
               })
+
+            // Map each semver tag_name -> previous semver tag_name (based on semver ordering, not date ordering)
+            const semverOrdered = filteredReleases
+              .map((release) => ({ tag: String(release.tag_name || ''), semver: parseSemver(release.tag_name) }))
+              .filter(({ semver }) => Boolean(semver))
+              .sort((a, b) => compareSemverAsc(a.semver, b.semver))
+
+            const prevTagByTag = new Map()
+            for (let i = 0; i < semverOrdered.length; i++) {
+              prevTagByTag.set(semverOrdered[i].tag, i > 0 ? semverOrdered[i - 1].tag : null)
+            }
+
+            const releases = filteredReleases
+              .slice()
               .sort((a, b) => {
                 const dayA = (a.published_at || '').slice(0, 10) // YYYY-MM-DD
                 const dayB = (b.published_at || '').slice(0, 10)
@@ -65,7 +87,29 @@ jobs:
               })
 
             const bodies = releases
-              .map((release) => String(release.body || '').trim())
+              .map((release) => {
+                const tag = String(release.tag_name || '').trim()
+                const semver = parseSemver(tag)
+                const semverString = semver ? `${semver.major}.${semver.minor}.${semver.patch}` : null
+
+                const rawBody = String(release.body || '')
+                const body = rawBody.trim()
+                if (!body) return ''
+
+                if (!semverString) return body
+
+                const firstLine = rawBody.trimStart().split('\n')[0] || ''
+                const semverInFirstLine = new RegExp(`\\bv?${escapeRegExp(semverString)}\\b`).test(firstLine)
+                if (semverInFirstLine) return body
+
+                const prevTag = prevTagByTag.get(tag) || null
+                const date = String(release.published_at || '').slice(0, 10)
+                const base = `https://github.com/${owner}/${repo}`
+                const link = prevTag ? `${base}/compare/${prevTag}...${tag}` : `${base}/releases/tag/${tag}`
+                const header = `## [${semverString}](${link}) (${date})`
+
+                return `${header}\n\n\n${body}`
+              })
               .filter(Boolean)
 
             const changelog = [`# ${title}`, ...bodies].join('\n\n')
