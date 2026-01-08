@@ -12,6 +12,9 @@ jobs:
       - uses: actions/github-script@v8
         with:
           script: |
+            const title = 'Changelog'
+            const filePath = 'CHANGELOG.md'
+            
             const maxSemver = (() => {
               const refName = '${{ github.ref_name }}'
               return /^\d+\.\d+$/.test(refName) ? refName : null
@@ -60,5 +63,12 @@ jobs:
                 if (dayA !== dayB) return dayB.localeCompare(dayA) // desc
                 return compareSemverDesc(parseSemver(a.tag_name), parseSemver(b.tag_name))
               })
-            console.log(releases)
+
+            const bodies = releases
+              .map((release) => String(release.body || '').trim())
+              .filter(Boolean)
+
+            const changelog = [`# ${title}`, ...bodies].join('\n\n')
+
+            console.log(changelog)
             
