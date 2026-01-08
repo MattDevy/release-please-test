@@ -12,35 +12,35 @@ jobs:
       - uses: actions/github-script@v8
         with:
           script: |
-            const title = 'Changelog'
-            const filePath = 'CHANGELOG.md'
-            
-            const maxSemver = (() => {
-              const refName = '${{ github.ref_name }}'
-              return /^\d+\.\d+$/.test(refName) ? refName : null
-            })()
+            // --- inputs / config ---
+            const TITLE = 'Changelog'
+            const OUTPUT_PATH = 'CHANGELOG.md' // reserved for later (writing file)
+            const MAX_SEMVER_BRANCH_RE = /^\d+\.\d+$/
+            const RELEASES_PER_PAGE = 100
 
-            const owner = '${{ github.repository_owner }}'
-            const repo = '${{ github.event.repository.name }}'
+            // --- repo / env ---
+            const { owner, repo } = context.repo
+            const serverUrl = process.env.GITHUB_SERVER_URL || 'https://github.com'
+            const baseRepoUrl = `${serverUrl}/${owner}/${repo}`
+            const refName = process.env.GITHUB_REF_NAME || ''
 
-            const releasesResponse = await github.rest.repos.listReleases({
-              owner,
-              repo,
-              per_page: 100,
-            })
+            const maxSemver = MAX_SEMVER_BRANCH_RE.test(refName) ? refName : null
+
+            // --- helpers ---
+            const toDay = (iso) => String(iso || '').slice(0, 10) // YYYY-MM-DD
+            const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
             const parseMajorMinor = (tag) => {
-              const match = String(tag).trim().match(/^v?(\d+)\.(\d+)(?:\.\d+)?/)
-              if (!match) return null
-              return { major: Number(match[1]), minor: Number(match[2]) }
+              const m = String(tag).trim().match(/^v?(\d+)\.(\d+)(?:\.\d+)?/)
+              return m ? { major: Number(m[1]), minor: Number(m[2]) } : null
             }
 
             const parseSemver = (tag) => {
-              const match = String(tag).trim().match(/^v?(\d+)\.(\d+)\.(\d+)/)
-              if (!match) return null
-              return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) }
+              const m = String(tag).trim().match(/^v?(\d+)\.(\d+)\.(\d+)/)
+              return m ? { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]) } : null
             }
 
-            const compareSemverDesc = (a, b) => {
+            const cmpSemverDesc = (a, b) => {
               if (!a && !b) return 0
               if (!a) return 1
               if (!b) return -1
@@ -48,10 +48,7 @@ jobs:
               if (a.minor !== b.minor) return b.minor - a.minor
               return b.patch - a.patch
             }
-
-            const compareSemverAsc = (a, b) => -compareSemverDesc(a, b)
-
-            const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const cmpSemverAsc = (a, b) => -cmpSemverDesc(a, b)
 
             const normalizeBodyHeadings = (input) => {
               const text = String(input || '').replace(/\r\n/g, '\n')
@@ -62,21 +59,16 @@ jobs:
 
               const headingMatch = (line) => line.match(/^(#{1,6})\s+(.*)$/)
 
-              // Ensure the first line is always an H2.
-              const firstHeading = headingMatch(lines[0])
-              if (firstHeading) {
-                lines[0] = `## ${firstHeading[2]}`
-              } else {
-                lines[0] = `## ${lines[0].trim()}`
-              }
+              // First line must be H2.
+              const first = headingMatch(lines[0])
+              lines[0] = first ? `## ${first[2]}` : `## ${lines[0].trim()}`
 
-              // If any later headings are H1/H2, downgrade *all* later headings equally
-              // so the minimum heading level becomes H3.
+              // If any later heading is H1/H2, shift *all* later headings equally
+              // so the minimum later heading becomes H3 (preserves hierarchy).
               let minLaterLevel = Infinity
               for (let i = 1; i < lines.length; i++) {
                 const m = headingMatch(lines[i])
-                if (!m) continue
-                minLaterLevel = Math.min(minLaterLevel, m[1].length)
+                if (m) minLaterLevel = Math.min(minLaterLevel, m[1].length)
               }
 
               const delta = minLaterLevel <= 2 ? 3 - minLaterLevel : 0
@@ -92,66 +84,85 @@ jobs:
               return lines.join('\n')
             }
 
-            const maxMajorMinor = maxSemver ? parseMajorMinor(maxSemver) : null
-            const filteredReleases = releasesResponse.data
-              .filter((release) => release.draft === false && release.prerelease === false)
-              .filter((release) => {
-                if (!maxMajorMinor) return true
-                const mm = parseMajorMinor(release.tag_name)
-                if (!mm) return false // non-semver tag; drop it
-                return (
-                  mm.major < maxMajorMinor.major ||
-                  (mm.major === maxMajorMinor.major && mm.minor <= maxMajorMinor.minor)
-                )
-              })
-
-            // Map each semver tag_name -> previous semver tag_name (based on semver ordering, not date ordering)
-            const semverOrdered = filteredReleases
-              .map((release) => ({ tag: String(release.tag_name || ''), semver: parseSemver(release.tag_name) }))
-              .filter(({ semver }) => Boolean(semver))
-              .sort((a, b) => compareSemverAsc(a.semver, b.semver))
-
-            const prevTagByTag = new Map()
-            for (let i = 0; i < semverOrdered.length; i++) {
-              prevTagByTag.set(semverOrdered[i].tag, i > 0 ? semverOrdered[i - 1].tag : null)
+            const shouldKeepUnderMax = (release) => {
+              const maxMajorMinor = maxSemver ? parseMajorMinor(maxSemver) : null
+              if (!maxMajorMinor) return true
+              const mm = parseMajorMinor(release.tag_name)
+              if (!mm) return false // if maxSemver is set, drop non-semver tags
+              return (
+                mm.major < maxMajorMinor.major ||
+                (mm.major === maxMajorMinor.major && mm.minor <= maxMajorMinor.minor)
+              )
             }
 
-            const releases = filteredReleases
-              .slice()
-              .sort((a, b) => {
-                const dayA = (a.published_at || '').slice(0, 10) // YYYY-MM-DD
-                const dayB = (b.published_at || '').slice(0, 10)
-                if (dayA !== dayB) return dayB.localeCompare(dayA) // desc
-                return compareSemverDesc(parseSemver(a.tag_name), parseSemver(b.tag_name))
-              })
+            const buildPrevTagMap = (releases) => {
+              // previous tag is based on semver ordering, not publish date ordering
+              const semverList = releases
+                .map((r) => ({ tag: String(r.tag_name || ''), semver: parseSemver(r.tag_name) }))
+                .filter((x) => Boolean(x.semver))
+                .sort((a, b) => cmpSemverAsc(a.semver, b.semver))
 
-            const bodies = releases
-              .map((release) => {
-                const tag = String(release.tag_name || '').trim()
-                const semver = parseSemver(tag)
-                const semverString = semver ? `${semver.major}.${semver.minor}.${semver.patch}` : null
+              const prevByTag = new Map()
+              for (let i = 0; i < semverList.length; i++) {
+                prevByTag.set(semverList[i].tag, i > 0 ? semverList[i - 1].tag : null)
+              }
+              return prevByTag
+            }
 
-                const rawBody = String(release.body || '')
-                const body = rawBody.trim()
-                if (!body) return ''
+            const releaseHeader = ({ semverString, tag, date, prevTag }) => {
+              const link = prevTag
+                ? `${baseRepoUrl}/compare/${prevTag}...${tag}`
+                : `${baseRepoUrl}/releases/tag/${tag}`
+              return `## [${semverString}](${link}) (${date})`
+            }
 
-                if (!semverString) return normalizeBodyHeadings(body)
+            const ensureHeaderIfMissing = (release, prevTagByTag) => {
+              const tag = String(release.tag_name || '').trim()
+              const semver = parseSemver(tag)
+              const semverString = semver ? `${semver.major}.${semver.minor}.${semver.patch}` : null
 
-                const firstLine = rawBody.trimStart().split('\n')[0] || ''
-                const semverInFirstLine = new RegExp(`\\bv?${escapeRegExp(semverString)}\\b`).test(firstLine)
-                if (semverInFirstLine) return normalizeBodyHeadings(body)
+              const rawBody = String(release.body || '')
+              const trimmed = rawBody.trim()
+              if (!trimmed) return ''
 
-                const prevTag = prevTagByTag.get(tag) || null
-                const date = String(release.published_at || '').slice(0, 10)
-                const base = `https://github.com/${owner}/${repo}`
-                const link = prevTag ? `${base}/compare/${prevTag}...${tag}` : `${base}/releases/tag/${tag}`
-                const header = `## [${semverString}](${link}) (${date})`
+              // If tag isn't semver, just normalize headings.
+              if (!semverString) return normalizeBodyHeadings(trimmed)
 
-                return normalizeBodyHeadings(`${header}\n\n\n${body}`)
-              })
-              .filter(Boolean)
+              // If first line already contains the semver (with optional "v"), don't add a header.
+              const firstLine = rawBody.trimStart().split('\n')[0] || ''
+              const semverInFirstLine = new RegExp(`\\bv?${escapeRegExp(semverString)}\\b`).test(firstLine)
+              if (semverInFirstLine) return normalizeBodyHeadings(trimmed)
 
-            const changelog = [`# ${title}`, ...bodies].join('\n\n') + '\n'
+              const date = toDay(release.published_at)
+              const prevTag = prevTagByTag.get(tag) || null
+              const header = releaseHeader({ semverString, tag, date, prevTag })
+              return normalizeBodyHeadings(`${header}\n\n\n${trimmed}`)
+            }
 
+            // --- fetch ---
+            const releasesResponse = await github.rest.repos.listReleases({
+              owner,
+              repo,
+              per_page: RELEASES_PER_PAGE,
+            })
+
+            // --- filter + sort ---
+            const stable = releasesResponse.data.filter((r) => !r.draft && !r.prerelease)
+            const filtered = stable.filter(shouldKeepUnderMax)
+
+            const prevTagByTag = buildPrevTagMap(filtered)
+
+            const sorted = filtered.slice().sort((a, b) => {
+              const dayA = toDay(a.published_at)
+              const dayB = toDay(b.published_at)
+              if (dayA !== dayB) return dayB.localeCompare(dayA) // date desc (day only)
+              return cmpSemverDesc(parseSemver(a.tag_name), parseSemver(b.tag_name)) // semver desc
+            })
+
+            // --- render ---
+            const bodies = sorted.map((r) => ensureHeaderIfMissing(r, prevTagByTag)).filter(Boolean)
+            const changelog = [`# ${TITLE}`, ...bodies].join('\n\n') + '\n'
+
+            // For now, only print the generated changelog
             console.log(changelog)
             
