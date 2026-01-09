@@ -40,19 +40,70 @@ jobs:
             }
 
             const parseSemver = (tag) => {
-              const m = String(tag).trim().match(/^v?(\d+)\.(\d+)\.(\d+)/)
-              return m ? { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]) } : null
+              const s = String(tag).trim()
+              const m = s.match(
+                /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+.*)?$/
+              )
+              if (!m) return null
+              const prerelease = m[4] ? m[4].split('.') : null
+              return {
+                major: Number(m[1]),
+                minor: Number(m[2]),
+                patch: Number(m[3]),
+                prerelease,
+              }
             }
 
-            const cmpSemverDesc = (a, b) => {
-              if (!a && !b) return 0
-              if (!a) return 1
-              if (!b) return -1
-              if (a.major !== b.major) return b.major - a.major
-              if (a.minor !== b.minor) return b.minor - a.minor
-              return b.patch - a.patch
+            const formatSemver = (s) => {
+              if (!s) return null
+              const base = `${s.major}.${s.minor}.${s.patch}`
+              return s.prerelease && s.prerelease.length ? `${base}-${s.prerelease.join('.')}` : base
             }
-            const cmpSemverAsc = (a, b) => -cmpSemverDesc(a, b)
+
+            const isNumericIdentifier = (id) => /^[0-9]+$/.test(id)
+
+            const cmpPrereleaseAsc = (aIds, bIds) => {
+              const a = aIds || []
+              const b = bIds || []
+              const len = Math.max(a.length, b.length)
+              for (let i = 0; i < len; i++) {
+                const ai = a[i]
+                const bi = b[i]
+                if (ai === undefined && bi === undefined) return 0
+                if (ai === undefined) return -1 // shorter set has lower precedence
+                if (bi === undefined) return 1
+                const aNum = isNumericIdentifier(ai)
+                const bNum = isNumericIdentifier(bi)
+                if (aNum && bNum) {
+                  const diff = Number(ai) - Number(bi)
+                  if (diff !== 0) return diff
+                  continue
+                }
+                if (aNum !== bNum) return aNum ? -1 : 1 // numeric has lower precedence than non-numeric
+                const cmp = String(ai).localeCompare(String(bi))
+                if (cmp !== 0) return cmp
+              }
+              return 0
+            }
+
+            // SemVer precedence: compare major/minor/patch; then stable > prerelease; then prerelease identifiers.
+            const cmpSemverAsc = (a, b) => {
+              if (!a && !b) return 0
+              if (!a) return -1
+              if (!b) return 1
+              if (a.major !== b.major) return a.major - b.major
+              if (a.minor !== b.minor) return a.minor - b.minor
+              if (a.patch !== b.patch) return a.patch - b.patch
+
+              const aPre = a.prerelease && a.prerelease.length ? a.prerelease : null
+              const bPre = b.prerelease && b.prerelease.length ? b.prerelease : null
+              if (!aPre && !bPre) return 0
+              if (!aPre) return 1 // stable has higher precedence than prerelease
+              if (!bPre) return -1
+              return cmpPrereleaseAsc(aPre, bPre)
+            }
+
+            const cmpSemverDesc = (a, b) => -cmpSemverAsc(a, b)
 
             const normalizeBodyHeadings = (input) => {
               const text = String(input || '').replace(/\r\n/g, '\n')
@@ -94,7 +145,7 @@ jobs:
               // If we can't parse semver, we can't reliably compare; keep prior behavior (don't drop).
               const semver = parseSemver(tag)
               if (!semver || !minSemver) return false
-              return cmpSemverDesc(semver, minSemver) > 0 // semver < min
+              return cmpSemverAsc(semver, minSemver) < 0 // semver < min
             }
 
             const shouldKeepUnderMax = (release) => {
@@ -134,7 +185,7 @@ jobs:
             const ensureHeaderIfMissing = (release, prevTagByTag) => {
               const tag = String(release.tag_name || '').trim()
               const semver = parseSemver(tag)
-              const semverString = semver ? `${semver.major}.${semver.minor}.${semver.patch}` : null
+              const semverString = formatSemver(semver)
 
               const rawBody = String(release.body || '')
               const trimmed = rawBody.trim()
@@ -162,8 +213,8 @@ jobs:
             })
 
             // --- filter + sort ---
-            const stable = releasesResponse.data.filter((r) => !r.draft && !r.prerelease)
-            const filtered = stable.filter(shouldKeepAboveMin).filter(shouldKeepUnderMax)
+            const published = releasesResponse.data.filter((r) => !r.draft)
+            const filtered = published.filter(shouldKeepAboveMin).filter(shouldKeepUnderMax)
 
             const prevTagByTag = buildPrevTagMap(filtered)
 
@@ -171,7 +222,8 @@ jobs:
               const dayA = toDay(a.published_at)
               const dayB = toDay(b.published_at)
               if (dayA !== dayB) return dayB.localeCompare(dayA) // date desc (day only)
-              return cmpSemverDesc(parseSemver(a.tag_name), parseSemver(b.tag_name)) // semver desc
+              if (Boolean(a.prerelease) !== Boolean(b.prerelease)) return a.prerelease ? 1 : -1 // stable first
+              return cmpSemverDesc(parseSemver(a.tag_name), parseSemver(b.tag_name)) // semver desc (prerelease-aware)
             })
 
             // --- render ---
