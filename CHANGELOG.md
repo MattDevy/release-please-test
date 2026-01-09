@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.0](https://github.com/MattDevy/release-please-test/compare/v0.2.4...v1.0.0) (2026-01-09)
+
+
+### Features
+
+* Add another ! ([3997155](https://github.com/MattDevy/release-please-test/commit/399715517b7329ff3d689536b2e23353076fa1fc))
+
+
+### Miscellaneous Chores
+
+* Release 1.0.0 ([490fb42](https://github.com/MattDevy/release-please-test/commit/490fb427ec7013498fea5d4503aa423115b40576))
+
 ## 0.2.4 (2025-11-25)
 
 **Full Changelog**: https://github.com/MattDevy/release-please-test/compare/v0.2.3...v0.2.4

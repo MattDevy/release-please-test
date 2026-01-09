@@ -1,5 +1,5 @@
 package version
 
-const Version = "0.2.4"
+const Version = "1.0.0"
 
 const Transport = Version
