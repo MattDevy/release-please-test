@@ -1,20 +1,24 @@
-name: update-changelog.yml
+name: Update Changelog
 on:
   workflow_dispatch:
 
 
 jobs:
   update-changelog:
+    permissions:
+      contents: read
+      pull-requests: write
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-      - uses: actions/github-script@v8
+      - name: Generate Changelog
+        id: generate-changelog
+        uses: actions/github-script@v8
         with:
+          result-encoding: string
           script: |
             // --- inputs / config ---
             const TITLE = 'Changelog'
-            const OUTPUT_PATH = 'CHANGELOG.md' // reserved for later (writing file)
+            const MIN_SEMVER = '0.2.0'
             const MAX_SEMVER_BRANCH_RE = /^\d+\.\d+$/
             const RELEASES_PER_PAGE = 100
 
@@ -84,6 +88,15 @@ jobs:
               return lines.join('\n')
             }
 
+            const minSemver = parseSemver(MIN_SEMVER)
+
+            const isBelowMin = (tag) => {
+              // If we can't parse semver, we can't reliably compare; keep prior behavior (don't drop).
+              const semver = parseSemver(tag)
+              if (!semver || !minSemver) return false
+              return cmpSemverDesc(semver, minSemver) > 0 // semver < min
+            }
+
             const shouldKeepUnderMax = (release) => {
               const maxMajorMinor = maxSemver ? parseMajorMinor(maxSemver) : null
               if (!maxMajorMinor) return true
@@ -94,6 +107,8 @@ jobs:
                 (mm.major === maxMajorMinor.major && mm.minor <= maxMajorMinor.minor)
               )
             }
+
+            const shouldKeepAboveMin = (release) => !isBelowMin(release.tag_name)
 
             const buildPrevTagMap = (releases) => {
               // previous tag is based on semver ordering, not publish date ordering
@@ -148,7 +163,7 @@ jobs:
 
             // --- filter + sort ---
             const stable = releasesResponse.data.filter((r) => !r.draft && !r.prerelease)
-            const filtered = stable.filter(shouldKeepUnderMax)
+            const filtered = stable.filter(shouldKeepAboveMin).filter(shouldKeepUnderMax)
 
             const prevTagByTag = buildPrevTagMap(filtered)
 
@@ -163,6 +178,9 @@ jobs:
             const bodies = sorted.map((r) => ensureHeaderIfMissing(r, prevTagByTag)).filter(Boolean)
             const changelog = [`# ${TITLE}`, ...bodies].join('\n\n') + '\n'
 
-            // For now, only print the generated changelog
             console.log(changelog)
-            
+            return changelog
+
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
