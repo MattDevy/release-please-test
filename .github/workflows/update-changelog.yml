@@ -15,7 +15,7 @@ jobs:
 
       - name: Generate and Commit Changelog
         id: generate-changelog
-        uses: elastic/clients-team-automations/gencheck@main
+        uses: elastic/clients-team-automations/update-changelog@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           title: 'Changelog'
