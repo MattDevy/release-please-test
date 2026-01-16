@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.0](https://github.com/MattDevy/release-please-test/compare/v0.2.4...v1.0.0) (2026-01-16)
+
+
+### Features
+
+* Add another ! ([3997155](https://github.com/MattDevy/release-please-test/commit/399715517b7329ff3d689536b2e23353076fa1fc))
+* **Typed API:** Test a markdown link: [example](https://example.com) ([5378b85](https://github.com/MattDevy/release-please-test/commit/5378b8502ee9278b7f4d9f13baf12303d2e41059))
+* **Typed API:** Test scope with space ([2c3d9b8](https://github.com/MattDevy/release-please-test/commit/2c3d9b83149d5e0d526ac5c7c48aac7e3b8e47f3))
+
+
+### Bug Fixes
+
+* Use draft prs ([cd7531e](https://github.com/MattDevy/release-please-test/commit/cd7531e9d8a4160da29194aa055bc72c3bc9ab8d))
+
+
+### Miscellaneous Chores
+
+* Release 1.0.0 ([490fb42](https://github.com/MattDevy/release-please-test/commit/490fb427ec7013498fea5d4503aa423115b40576))
+
 ## 0.2.4 (2025-11-25)
 
 **Full Changelog**: https://github.com/MattDevy/release-please-test/compare/v0.2.3...v0.2.4
